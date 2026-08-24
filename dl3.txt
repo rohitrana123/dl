@@ -1,0 +1,375 @@
+#------------------------------------------------------------------------
+# Step 1: Install Required Libraries and Check Versions
+#------------------------------------------------------------------------
+
+get_ipython().run_line_magic('pip', 'install -q tensorflow matplotlib pandas streamlit')
+get_ipython().run_line_magic('pip', 'install --upgrade "protobuf>=6.31.1,<7"')
+
+get_ipython().run_line_magic('pip', 'check')
+
+import tensorflow as tf
+import streamlit as st
+import google.protobuf
+
+print("TensorFlow:", tf.__version__)
+print("Streamlit:", st.__version__)
+print("Protobuf:", google.protobuf.__version__)
+import warnings
+warnings.filterwarnings("ignore")
+
+
+#------------------------------------------------------------------------
+# Step 2: Import Libraries and Set Random Seed
+#------------------------------------------------------------------------
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras import layers, models
+
+SEED = 42
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+print("TensorFlow version:", tf.__version__)
+import warnings
+warnings.filterwarnings("ignore")
+
+
+#------------------------------------------------------------------------
+# Step 3: Load and Inspect the MNIST Dataset
+#------------------------------------------------------------------------
+
+(x_train_full, y_train_full), (x_test, y_test) = (tf.keras.datasets.mnist.load_data())
+
+print("Original training images:", x_train_full.shape)
+print("Original training labels:", y_train_full.shape)
+print("Test images:", x_test.shape)
+print("Test labels:", y_test.shape)
+print("Pixel-value range:", x_train_full.min(), "to", x_train_full.max())
+
+
+#------------------------------------------------------------------------
+# Step 4: Shuffle and Split the Dataset
+#------------------------------------------------------------------------
+
+# Shuffle the original training set reproducibly.
+indices = np.random.permutation(len(x_train_full))
+x_train_full = x_train_full[indices]
+y_train_full = y_train_full[indices]
+
+x_train = x_train_full[:10000]
+y_train = y_train_full[:10000]
+
+x_validation = x_train_full[10000:12000]
+y_validation = y_train_full[10000:12000]
+
+x_test = x_test[:3000]
+y_test = y_test[:3000]
+
+split_table = pd.DataFrame({
+    "Dataset split": ["Training", "Validation", "Testing"],
+    "Images": [len(x_train), len(x_validation), len(x_test)],
+    "Image shape": [
+        str(x_train.shape[1:]),
+        str(x_validation.shape[1:]),
+        str(x_test.shape[1:])
+    ]
+})
+
+display(split_table)
+
+
+#------------------------------------------------------------------------
+# Step 5: Visualize Sample MNIST Images
+#------------------------------------------------------------------------
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 4))
+
+for position in range(10):
+    plt.subplot(2, 5, position + 1)
+    plt.imshow(x_train[position], cmap="gray")
+    plt.title(f"Label: {y_train[position]}")
+    plt.axis("off")
+
+plt.suptitle("Sample MNIST Images")
+plt.tight_layout()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 6: Normalize and Reshape the Image Data
+#------------------------------------------------------------------------
+
+x_train = x_train.astype("float32") / 255.0
+x_validation = x_validation.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+x_train = np.expand_dims(x_train, axis=-1)
+x_validation = np.expand_dims(x_validation, axis=-1)
+x_test = np.expand_dims(x_test, axis=-1)
+
+print("Training tensor shape:", x_train.shape)
+print("Validation tensor shape:", x_validation.shape)
+print("Testing tensor shape:", x_test.shape)
+print("Normalized pixel range:", x_train.min(), "to", x_train.max())
+
+
+#------------------------------------------------------------------------
+# Step 7: Build the CNN Model
+#------------------------------------------------------------------------
+
+model = models.Sequential([
+    layers.Input(shape=(28, 28, 1)),
+
+    layers.Conv2D(
+        filters=16,
+        kernel_size=(3, 3),
+        padding="same",
+        activation="relu",
+        name="Convolution_1"
+    ),
+    layers.MaxPooling2D(
+        pool_size=(2, 2),
+        name="MaxPool_1"
+    ),
+
+    layers.Conv2D(
+        filters=32,
+        kernel_size=(3, 3),
+        padding="same",
+        activation="relu",
+        name="Convolution_2"
+    ),
+    layers.MaxPooling2D(
+        pool_size=(2, 2),
+        name="MaxPool_2"
+    ),
+
+    layers.Flatten(name="Flatten"),
+
+    layers.Dense(
+        32,
+        activation="relu",
+        name="Dense_Hidden"
+    ),
+
+    layers.Dense(
+        10,
+        activation="softmax",
+        name="Output"
+    )
+])
+
+model.summary()
+
+
+#------------------------------------------------------------------------
+# Step 8: Display CNN Layer Details and Parameters
+#------------------------------------------------------------------------
+
+layer_rows = []
+
+for layer in model.layers:
+    layer_rows.append({
+        "Layer": layer.name,
+        "Layer type": layer.__class__.__name__,
+        "Output shape": str(tuple(layer.output.shape)),
+        "Parameters": layer.count_params()
+    })
+
+layer_table = pd.DataFrame(layer_rows)
+
+display(layer_table)
+
+print("Total trainable parameters:", model.count_params())
+
+
+#------------------------------------------------------------------------
+# Step 9: Compile the CNN Model
+#------------------------------------------------------------------------
+
+model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("Model compiled successfully.")
+
+
+#------------------------------------------------------------------------
+# Step 10: Train the CNN Model
+#------------------------------------------------------------------------
+
+history = model.fit(
+    x_train,
+    y_train,
+    validation_data=(x_validation, y_validation),
+    epochs=3,
+    batch_size=64,
+    verbose=1
+)
+
+
+#------------------------------------------------------------------------
+# Step 11: Plot Training and Validation Loss
+#------------------------------------------------------------------------
+
+epoch_numbers = range(1, len(history.history["loss"]) + 1)
+
+plt.figure(figsize=(8, 5))
+plt.plot(
+    epoch_numbers,
+    history.history["loss"],
+    marker="o",
+    label="Training loss"
+)
+plt.plot(
+    epoch_numbers,
+    history.history["val_loss"],
+    marker="o",
+    label="Validation loss"
+)
+plt.xlabel("Epoch")
+plt.ylabel("Cross-entropy loss")
+plt.title("CNN Loss")
+plt.grid(alpha=0.3)
+plt.legend()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 12: Plot Training and Validation Accuracy
+#------------------------------------------------------------------------
+
+plt.figure(figsize=(8, 5))
+plt.plot(
+    epoch_numbers,
+    history.history["accuracy"],
+    marker="o",
+    label="Training accuracy"
+)
+plt.plot(
+    epoch_numbers,
+    history.history["val_accuracy"],
+    marker="o",
+    label="Validation accuracy"
+)
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.title("CNN Accuracy")
+plt.ylim(0, 1.02)
+plt.grid(alpha=0.3)
+plt.legend()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 13: Evaluate the CNN Model on Test Data
+#------------------------------------------------------------------------
+
+test_loss, test_accuracy = model.evaluate(
+    x_test,
+    y_test,
+    verbose=0
+)
+
+result_table = pd.DataFrame({
+    "Measure": ["Test loss", "Test accuracy"],
+    "Value": [test_loss, test_accuracy]
+})
+
+display(result_table)
+
+
+#------------------------------------------------------------------------
+# Step 14: Generate Predictions and Prediction Confidence
+#------------------------------------------------------------------------
+
+probabilities = model.predict(
+    x_test,
+    verbose=0
+)
+
+predicted_labels = np.argmax(
+    probabilities,
+    axis=1
+)
+
+prediction_confidence = np.max(
+    probabilities,
+    axis=1
+)
+
+prediction_table = pd.DataFrame({
+    "Actual digit": y_test[:15],
+    "Predicted digit": predicted_labels[:15],
+    "Confidence": prediction_confidence[:15],
+    "Correct": y_test[:15] == predicted_labels[:15]
+})
+
+display(prediction_table)
+
+
+#------------------------------------------------------------------------
+# Step 15: Generate and Visualize Confusion Matrix
+#------------------------------------------------------------------------
+
+#confusion matrix
+confusion = tf.math.confusion_matrix(
+    y_test,
+    predicted_labels,
+    num_classes=10
+).numpy()
+
+plt.figure(figsize=(8, 7))
+plt.imshow(confusion)
+plt.title("MNIST Confusion Matrix")
+plt.xlabel("Predicted digit")
+plt.ylabel("Actual digit")
+plt.xticks(range(10))
+plt.yticks(range(10))
+plt.colorbar()
+
+for row in range(10):
+    for column in range(10):
+        plt.text(
+            column,
+            row,
+            confusion[row, column],
+            ha="center",
+            va="center"
+        )
+
+plt.tight_layout()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 16: Visualize CNN Predictions on Test Images
+#------------------------------------------------------------------------
+
+plt.figure(figsize=(12, 7))
+
+for position in range(15):
+    plt.subplot(3, 5, position + 1)
+    plt.imshow(
+        x_test[position].squeeze(),
+        cmap="gray"
+    )
+
+    plt.title(
+        f"Actual: {y_test[position]}\n"
+        f"Predicted: {predicted_labels[position]}\n"
+        f"Confidence: {prediction_confidence[position]:.2f}"
+    )
+    plt.axis("off")
+
+plt.suptitle("CNN Predictions on MNIST Test Images")
+plt.tight_layout()
+plt.show()

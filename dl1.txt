@@ -1,0 +1,275 @@
+#------------------------------------------------------------------------
+# Step 1: Import required libraries
+#------------------------------------------------------------------------
+
+import math
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+#------------------------------------------------------------------------
+# Step 2: Create input values
+#------------------------------------------------------------------------
+
+x = np.linspace(-6, 6, 1000)
+
+
+#------------------------------------------------------------------------
+# Step 3: Create common plotting function
+#------------------------------------------------------------------------
+
+# Blue curve is the original activation function, orange represents derivative
+def plot_function_and_derivative(name, function, derivative, x_values=x):
+    y = function(x_values)
+    dy = derivative(x_values)
+
+    plt.figure(figsize=(9,5))
+    plt.plot(x_values, y, label="Original Function: f(z)", linewidth=2)
+    plt.plot(x_values, dy, label="Derivative: f'(z)", linewidth=2)
+    plt.axhline(0, linewidth=0.8)
+    plt.axvline(0, linewidth=0.8)
+    plt.xlabel("Input z")
+    plt.ylabel("Output")
+    plt.title(name)
+    plt.grid(alpha=0.3)
+    plt.legend()
+    plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 4: Binary Step Function
+#------------------------------------------------------------------------
+
+def binary_step(z):
+    return np.where(z >= 0, 1.0, 0.0)
+
+def binary_step_derivative(z):
+    # 0 is used for visualization, derivative is undefined at z=0
+    return np.zeros_like(z)
+
+plot_function_and_derivative(
+    "Binary Step Function",
+    binary_step,
+    binary_step_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 5: Linear/Identity Function
+#------------------------------------------------------------------------
+
+def linear(z):
+    return z
+
+def linear_derivative(z):
+    return np.ones_like(z)
+
+plot_function_and_derivative(
+    "Linear/Identity Function",
+    linear,
+    linear_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 6: Sigmoid Function
+#------------------------------------------------------------------------
+
+def sigmoid(z):
+    z = np.asarray(z, dtype=float)
+    return 1.0 / (1.0 + np.exp(-z))
+
+def sigmoid_derivative(z):
+    s = sigmoid(z)
+    return s * (1.0 - s)
+
+plot_function_and_derivative(
+    "Sigmoid Function",
+    sigmoid,
+    sigmoid_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 7: Hyperbolic Tangent (Tanh) Function
+#------------------------------------------------------------------------
+
+def tanh_function(z):
+    return np.tanh(z)
+
+def tanh_derivative(z):
+    return 1.0 - np.tanh(z) ** 2
+
+plot_function_and_derivative(
+    "Hyperbolic Tangent Function",
+    tanh_function,
+    tanh_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 8: ReLU Function
+#------------------------------------------------------------------------
+
+def relu(z):
+    return np.maximum(0.0, z)
+
+def relu_derivative(z):
+    return np.where(z > 0, 1.0, 0.0)
+
+plot_function_and_derivative(
+    "Rectified Linear Unit",
+    relu,
+    relu_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 9: Leaky ReLU Function
+#------------------------------------------------------------------------
+
+alpha = 0.01
+
+def leaky_relu(z):
+    return np.where(z >= 0, z, alpha * z)
+
+def leaky_relu_derivative(z):
+    return np.where(z > 0, 1.0, alpha)
+
+plot_function_and_derivative(
+    "Leaky ReLU",
+    leaky_relu,
+    leaky_relu_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 10: ELU Function
+#------------------------------------------------------------------------
+
+elu_alpha = 1.0
+
+def elu(z):
+    return np.where(
+        z > 0,
+        z,
+        elu_alpha * (np.exp(z) - 1.0)
+    )
+
+def elu_derivative(z):
+    return np.where(
+        z > 0,
+        1.0,
+        elu_alpha * np.exp(z)
+    )
+
+plot_function_and_derivative(
+    "Exponential Linear Unit",
+    elu,
+    elu_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 11: Softplus Function
+#------------------------------------------------------------------------
+
+def softplus(z):
+    return np.log1p(np.exp(z))
+
+def softplus_derivative(z):
+    return sigmoid(z)
+
+plot_function_and_derivative(
+    "Softplus Function",
+    softplus,
+    softplus_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 12: Swish / SiLU Function
+#------------------------------------------------------------------------
+
+def swish(z):
+    return z * sigmoid(z)
+
+def swish_derivative(z):
+    s = sigmoid(z)
+    return s + z * s * (1.0 - s)
+
+plot_function_and_derivative(
+    "Swish or SiLU Function",
+    swish,
+    swish_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 13: GELU Function
+#------------------------------------------------------------------------
+
+def normal_cdf(z):
+    values = np.vectorize(math.erf)(z / np.sqrt(2.0))
+    return 0.5 * (1.0 + values)
+
+def normal_pdf(z):
+    return np.exp(-0.5 * z ** 2) / np.sqrt(2.0 * np.pi)
+
+def gelu(z):
+    return z * normal_cdf(z)
+
+def gelu_derivative(z):
+    return normal_cdf(z) + z * normal_pdf(z)
+
+plot_function_and_derivative(
+    "Gaussian Error Linear Unit",
+    gelu,
+    gelu_derivative
+)
+
+
+#------------------------------------------------------------------------
+# Step 14: Softmax Function
+#------------------------------------------------------------------------
+
+def softmax(logits):
+    logits = np.asarray(logits, dtype=float)
+    shifted = logits - np.max(logits)
+    exp_values = np.exp(shifted)
+    return exp_values / exp_values.sum()
+
+
+#------------------------------------------------------------------------
+# Step 15: Softmax Derivative (Jacobian Matrix)
+#------------------------------------------------------------------------
+
+def softmax_jacobian(logits):
+    probabilities = softmax(logits)
+    return np.diag(probabilities) - np.outer(
+        probabilities,
+        probabilities
+    )
+
+
+#------------------------------------------------------------------------
+# Step 16: Calculate Softmax Output
+#------------------------------------------------------------------------
+
+logits = np.array([2.0, 1.0, 0.1])
+
+probabilities = softmax(logits)
+jacobian = softmax_jacobian(logits)
+
+print("Input logits:", logits)
+print("Softmax probabilities:", probabilities)
+print("Sum of probabilities:", probabilities.sum())
+
+
+#------------------------------------------------------------------------
+# Step 17: Display Softmax Derivative Matrix
+#------------------------------------------------------------------------
+
+print("\nSoftmax derivative matrix:")
+print(jacobian)
