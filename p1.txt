@@ -1,0 +1,196 @@
+#------------------------------------------------------------------------
+# Step 1: Import required libraries
+#------------------------------------------------------------------------
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Input values
+x = np.linspace(-5, 5, 100)
+print(x)
+
+
+#------------------------------------------------------------------------
+# Step 2: Common plotting function
+#------------------------------------------------------------------------
+def plot_function(f, df, name):
+    y = f(x)
+    dy = df(x)
+
+    plt.plot(x, y, label='f(x)')
+    plt.plot(x, dy, label="f'(x)")
+    plt.title(name)
+    plt.xlabel('x')
+    plt.ylabel('Output')
+    plt.grid()
+    plt.legend()
+    plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 3: Binary step function
+#------------------------------------------------------------------------
+def binary_step(x):
+    return np.where(x >= 0, 1, 0)
+
+def binary_step_derivative(x):
+    # Derivative is taken as 0 for visualization
+    return np.zeros_like(x)
+
+plot_function(binary_step, binary_step_derivative, 'Binary Step Function')
+
+
+#------------------------------------------------------------------------
+# Step 4: Linear / Identity function
+#------------------------------------------------------------------------
+def linear(x):
+    return x
+
+def linear_derivative(x):
+    return np.ones_like(x)
+
+plot_function(linear, linear_derivative, 'Linear / Identity Function')
+
+
+#------------------------------------------------------------------------
+# Step 5: Sigmoid function
+#------------------------------------------------------------------------
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def sigmoid_derivative(x):
+    s = sigmoid(x)
+    return s * (1 - s)
+
+plot_function(sigmoid, sigmoid_derivative, 'Sigmoid Function')
+
+
+#------------------------------------------------------------------------
+# Step 6: Tanh function
+#------------------------------------------------------------------------
+def tanh(x):
+    return np.tanh(x)
+
+def tanh_derivative(x):
+    return 1 - np.tanh(x) ** 2
+
+plot_function(tanh, tanh_derivative, 'Tanh Function')
+
+
+#------------------------------------------------------------------------
+# Step 7: ReLU function
+#------------------------------------------------------------------------
+def relu(x):
+    return np.maximum(0, x)
+
+def relu_derivative(x):
+    return np.where(x > 0, 1, 0)
+
+plot_function(relu, relu_derivative, 'ReLU Function')
+
+
+#------------------------------------------------------------------------
+# Step 8: Leaky ReLU function
+#------------------------------------------------------------------------
+alpha = 0.01
+
+def leaky_relu(x):
+    return np.where(x > 0, x, alpha * x)
+
+def leaky_relu_derivative(x):
+    return np.where(x > 0, 1, alpha)
+
+plot_function(leaky_relu, leaky_relu_derivative, 'Leaky ReLU Function')
+
+
+#------------------------------------------------------------------------
+# Step 9: ELU function
+#------------------------------------------------------------------------
+alpha = 1
+
+def elu(x):
+    return np.where(x > 0, x, alpha * (np.exp(x) - 1))
+
+def elu_derivative(x):
+    return np.where(x > 0, 1, alpha * np.exp(x))
+
+plot_function(elu, elu_derivative, 'ELU Function')
+
+
+#------------------------------------------------------------------------
+# Step 10: Softplus function
+#------------------------------------------------------------------------
+def softplus(x):
+    return np.log(1 + np.exp(x))
+
+def softplus_derivative(x):
+    return sigmoid(x)
+
+plot_function(softplus, softplus_derivative, 'Softplus Function')
+
+
+#------------------------------------------------------------------------
+# Step 11: Swish / SiLU function
+#------------------------------------------------------------------------
+def swish(x):
+    return x * sigmoid(x)
+
+def swish_derivative(x):
+    s = sigmoid(x)
+    return s + x * s * (1 - s)
+
+plot_function(swish, swish_derivative, 'Swish / SiLU Function')
+
+
+#------------------------------------------------------------------------
+# Step 12: GELU function
+#------------------------------------------------------------------------
+from scipy.special import erf
+
+def gelu(x):
+    return 0.5 * x * (1 + erf(x / np.sqrt(2)))
+
+# GELU derivative is omitted here to keep the exam implementation simple.
+y = gelu(x)
+plt.plot(x, y)
+plt.title('GELU Function')
+plt.xlabel('x')
+plt.ylabel('Output')
+plt.grid()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 13: Softmax function
+#------------------------------------------------------------------------
+# Example logits
+logits = np.array([2.0, 1.0, 0.1])
+
+# Numerically stable Softmax
+exp_values = np.exp(logits - np.max(logits))
+probabilities = exp_values / np.sum(exp_values)
+
+print('Softmax:', probabilities)
+print('Sum:', np.sum(probabilities))
+
+
+#------------------------------------------------------------------------
+# Step 14: Quick revision - summary of all activation functions
+#------------------------------------------------------------------------
+quick_revision = {
+    'Binary Step': '0 or 1',
+    'Linear': 'x',
+    'Sigmoid': '1 / (1 + exp(-x))',
+    'Tanh': 'tanh(x)',
+    'ReLU': 'max(0, x)',
+    'Leaky ReLU': 'x or alpha*x',
+    'ELU': 'x or alpha*(exp(x)-1)',
+    'Softplus': 'log(1 + exp(x))',
+    'Swish': 'x * sigmoid(x)',
+    'GELU': 'Gaussian-error-function based activation',
+    'Softmax': 'Converts logits to probabilities; sum = 1'
+}
+
+print(f"{'Activation':<15}{'Main formula / idea'}")
+print('-' * 55)
+for name, formula in quick_revision.items():
+    print(f"{name:<15}{formula}")

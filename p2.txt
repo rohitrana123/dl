@@ -1,0 +1,159 @@
+#------------------------------------------------------------------------
+# Step 1: Import libraries
+#------------------------------------------------------------------------
+import numpy as np
+import pandas as pd
+
+from sklearn.datasets import load_digits
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, f1_score
+
+
+#------------------------------------------------------------------------
+# Step 2: Load and inspect the data
+#------------------------------------------------------------------------
+# Load handwritten digits dataset
+digits = load_digits()
+
+X = digits.data
+y = digits.target
+
+print('Input shape:', X.shape)
+print('Target shape:', y.shape)
+print('Number of classes:', len(np.unique(y)))
+print('Classes:', np.unique(y))
+
+
+#------------------------------------------------------------------------
+# Step 3: Train / validation / test split
+#------------------------------------------------------------------------
+# 80% training/validation and 20% final testing
+X_train_val, X_test, y_train_val, y_test = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y
+)
+
+# Split remaining data into training and validation sets
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train_val, y_train_val, test_size=0.25,
+    random_state=42, stratify=y_train_val
+)
+
+print('Training samples:', len(X_train))
+print('Validation samples:', len(X_val))
+print('Testing samples:', len(X_test))
+
+
+#------------------------------------------------------------------------
+# Step 4: Feature standardization
+#------------------------------------------------------------------------
+scaler = StandardScaler()
+
+# Fit only on training data
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
+
+print('Standardization completed.')
+
+
+#------------------------------------------------------------------------
+# Step 5: Multi-layer perceptron architecture
+#------------------------------------------------------------------------
+# Different hidden-layer configurations are tested to study the effect of
+# network depth and size.
+#   Small-Shallow:     (32,)
+#   Medium-Two-Layer:  (64, 32)
+#   Deep-Three-Layer:  (128, 64, 32)
+# The output layer contains 10 classes, corresponding to digits 0-9.
+
+layer_configurations = {
+    'Small-Shallow': (32,),
+    'Medium-Two-Layer': (64, 32),
+    'Deep-Three-Layer': (128, 64, 32)
+}
+
+activation_functions = ['relu', 'tanh', 'logistic']
+
+
+#------------------------------------------------------------------------
+# Step 6: Experimental design
+#------------------------------------------------------------------------
+# Create all activation-function and architecture combinations
+experiment_plan = []
+
+for activation in activation_functions:
+    for name, layers in layer_configurations.items():
+        experiment_plan.append([activation, name, layers])
+
+plan = pd.DataFrame(experiment_plan, columns=['Activation', 'Configuration', 'Hidden Layers'])
+
+print(plan)
+
+
+#------------------------------------------------------------------------
+# Step 7: Training
+#------------------------------------------------------------------------
+results = []
+models = {}
+
+for activation in activation_functions:
+    for name, layers in layer_configurations.items():
+
+        # Build MLP model
+        model = MLPClassifier(
+            hidden_layer_sizes=layers, activation=activation, solver='adam',
+            max_iter=300, early_stopping=True, random_state=42
+        )
+
+        # Train the model
+        model.fit(X_train, y_train)
+
+        # Validation prediction
+        pred = model.predict(X_val)
+        acc = accuracy_score(y_val, pred)
+        f1 = f1_score(y_val, pred, average='macro')
+
+        models[f'{activation} - {name}'] = model
+        results.append([activation, name, acc, f1])
+
+results_df = pd.DataFrame(
+    results, columns=['Activation', 'Configuration', 'Validation Accuracy', 'Validation F1']
+)
+
+print('All experiments completed.')
+
+
+#------------------------------------------------------------------------
+# Step 8: Experimental results
+#------------------------------------------------------------------------
+# Rank models by validation accuracy
+results_df = results_df.sort_values(
+    by=['Validation Accuracy', 'Validation F1'], ascending=False
+).reset_index(drop=True)
+
+results_df.index = results_df.index + 1
+results_df.index.name = 'Rank'
+
+print(results_df)
+
+
+#------------------------------------------------------------------------
+# Step 9: Quick revision - summary of key concepts
+#------------------------------------------------------------------------
+quick_revision = {
+    'MLP': 'Feed-forward neural network with one or more hidden layers.',
+    'ReLU': 'Common non-linear activation; max(0, x).',
+    'Tanh': 'Outputs values between -1 and 1.',
+    'Logistic / Sigmoid': 'Outputs values between 0 and 1.',
+    'Standardization': 'Scales input features before training.',
+    'Validation accuracy': 'Used to compare the different models.',
+    'More layers/neurons': 'Generally increase model capacity but may also increase training complexity.',
+    'Best model': 'The configuration with the highest validation accuracy in the results table.'
+}
+
+print(f"{'Concept':<22}{'Explanation'}")
+print('-' * 90)
+for concept, explanation in quick_revision.items():
+    print(f"{concept:<22}{explanation}")
