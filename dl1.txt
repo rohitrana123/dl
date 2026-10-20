@@ -1,0 +1,361 @@
+#------------------------------------------------------------------------
+# Step 1: Import required libraries
+#------------------------------------------------------------------------
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import matplotlib.pyplot as plt
+
+print("TensorFlow version:", tf.__version__)
+print("Keras version:", keras.__version__)
+
+tf.random.set_seed(42)
+rng = np.random.default_rng(42)
+
+
+#------------------------------------------------------------------------
+# Step 2: Define and visualize the real data distribution (ring)
+#------------------------------------------------------------------------
+def real_batch(n):
+    """Sample n points near a ring of radius ~0.8 centered at the origin."""
+    angles = rng.uniform(0, 2 * np.pi, n)
+    r = 0.8 + 0.05 * rng.normal(size=n)
+    x = np.stack([r * np.cos(angles), r * np.sin(angles)], axis=1)
+    return x.astype("float32")
+
+sample = real_batch(500)
+
+plt.figure(figsize=(4, 4))
+plt.scatter(sample[:, 0], sample[:, 1], s=8, color="tab:blue")
+plt.title("Real data distribution (target)")
+plt.xlim(-1.3, 1.3)
+plt.ylim(-1.3, 1.3)
+plt.gca().set_aspect("equal")
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 3: Inspect the real data
+#------------------------------------------------------------------------
+radii = np.linalg.norm(sample, axis=1)
+
+print("sample shape:", sample.shape)
+print("sample dtype:", sample.dtype)
+print("mean radius:", float(radii.mean()))
+print("minimum radius:", float(radii.min()))
+print("maximum radius:", float(radii.max()))
+print("first point:", sample[0])
+
+
+#------------------------------------------------------------------------
+# Step 4: Build the Generator and Discriminator
+#------------------------------------------------------------------------
+LATENT_DIM = 2
+DATA_DIM = 2
+HIDDEN = 32
+
+def build_generator():
+    return keras.Sequential([
+        layers.Input(shape=(LATENT_DIM,)),
+        layers.Dense(HIDDEN, activation="leaky_relu"),
+        layers.Dense(HIDDEN, activation="leaky_relu"),
+        layers.Dense(DATA_DIM, activation="tanh"),
+    ], name="generator")
+
+def build_discriminator():
+    return keras.Sequential([
+        layers.Input(shape=(DATA_DIM,)),
+        layers.Dense(HIDDEN, activation="leaky_relu"),
+        layers.Dense(HIDDEN, activation="leaky_relu"),
+        layers.Dense(1, activation="sigmoid"),
+    ], name="discriminator")
+
+G = build_generator()
+D = build_discriminator()
+
+G.summary()
+D.summary()
+
+
+#------------------------------------------------------------------------
+# Step 5: Check model shapes and parameter counts
+#------------------------------------------------------------------------
+print("G input shape:", G.input_shape)
+print("G output shape:", G.output_shape)
+print("G parameters:", G.count_params())
+
+print("D input shape:", D.input_shape)
+print("D output shape:", D.output_shape)
+print("D parameters:", D.count_params())
+
+
+#------------------------------------------------------------------------
+# Step 6: Define loss function and optimizers
+#------------------------------------------------------------------------
+bce = keras.losses.BinaryCrossentropy()
+
+g_optimizer = keras.optimizers.Adam(learning_rate=0.002, beta_1=0.5)
+d_optimizer = keras.optimizers.Adam(learning_rate=0.002, beta_1=0.5)
+
+print("Loss: Binary Cross-Entropy")
+print("Optimizer: Adam(lr=0.002, beta_1=0.5) for both G and D")
+
+
+#------------------------------------------------------------------------
+# Step 7: Visualize the untrained Generator output
+#------------------------------------------------------------------------
+untrained_fake = G(tf.random.normal((500, LATENT_DIM)), training=False).numpy()
+
+plt.figure(figsize=(4, 4))
+plt.scatter(sample[:, 0], sample[:, 1],
+            s=8, color="tab:blue", alpha=0.4, label="real")
+plt.scatter(untrained_fake[:, 0], untrained_fake[:, 1],
+            s=8, color="tab:red", alpha=0.6, label="fake (untrained G)")
+plt.legend()
+plt.title("Before Training: G(z) is just noise")
+plt.xlim(-1.5, 1.5)
+plt.ylim(-1.5, 1.5)
+plt.gca().set_aspect("equal")
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 8: Check Discriminator on untrained fake data
+#------------------------------------------------------------------------
+untrained_pred = D(untrained_fake, training=False).numpy()
+
+print("untrained_fake shape:", untrained_fake.shape)
+print("mean generated radius:",
+      float(np.linalg.norm(untrained_fake, axis=1).mean()))
+print("max absolute generated value:",
+      float(np.max(np.abs(untrained_fake))))
+print("mean D(fake) before training:", float(untrained_pred.mean()))
+
+
+#------------------------------------------------------------------------
+# Step 9: Define the GAN training step
+#------------------------------------------------------------------------
+BATCH = 128
+
+@tf.function
+def train_step(real):
+    # Phase A: train Discriminator
+    z = tf.random.normal((BATCH, LATENT_DIM))
+
+    with tf.GradientTape() as d_tape:
+        fake = G(z, training=True)
+        d_real_pred = D(real, training=True)
+        d_fake_pred = D(fake, training=True)
+
+        d_loss = (
+            bce(tf.ones_like(d_real_pred), d_real_pred)
+            +
+            bce(tf.zeros_like(d_fake_pred), d_fake_pred)
+        )
+
+    d_grads = d_tape.gradient(d_loss, D.trainable_variables)
+    d_optimizer.apply_gradients(zip(d_grads, D.trainable_variables))
+
+    # Phase B: train Generator
+    z2 = tf.random.normal((BATCH, LATENT_DIM))
+
+    with tf.GradientTape() as g_tape:
+        fake2 = G(z2, training=True)
+        d_fake2_pred = D(fake2, training=True)
+
+        g_loss = bce(tf.ones_like(d_fake2_pred), d_fake2_pred)
+
+    g_grads = g_tape.gradient(g_loss, G.trainable_variables)
+    g_optimizer.apply_gradients(zip(g_grads, G.trainable_variables))
+
+    return d_loss, g_loss
+
+print("Training step compiled.")
+
+
+#------------------------------------------------------------------------
+# Step 10: Sanity check of the forward pass
+#------------------------------------------------------------------------
+test_z = tf.random.normal((BATCH, LATENT_DIM))
+test_fake = G(test_z, training=False)
+test_pred = D(test_fake, training=False)
+
+print("test_z shape:", test_z.shape)
+print("test_fake shape:", test_fake.shape)
+print("D(test_fake) shape:", test_pred.shape)
+
+
+#------------------------------------------------------------------------
+# Step 11: Train the GAN
+#------------------------------------------------------------------------
+EPOCHS = 4000
+SNAPSHOT_EVERY = 500
+
+d_losses, g_losses = [], []
+snapshots = {}
+
+for epoch in range(EPOCHS + 1):
+    real = tf.convert_to_tensor(real_batch(BATCH))
+
+    d_loss, g_loss = train_step(real)
+
+    d_losses.append(float(d_loss))
+    g_losses.append(float(g_loss))
+
+    if epoch % SNAPSHOT_EVERY == 0:
+        snapshots[epoch] = G(
+            tf.random.normal((300, LATENT_DIM)),
+            training=False
+        ).numpy()
+
+        print(
+            f"epoch {epoch:5d}   "
+            f"D_loss = {float(d_loss):.4f}   "
+            f"G_loss = {float(g_loss):.4f}"
+        )
+
+print("\nTraining complete.")
+
+
+#------------------------------------------------------------------------
+# Step 12: Inspect training history
+#------------------------------------------------------------------------
+print("number of D losses:", len(d_losses))
+print("number of G losses:", len(g_losses))
+print("snapshot epochs:", sorted(snapshots.keys()))
+print("number of snapshots:", len(snapshots))
+print("snapshot[0] shape:", snapshots[0].shape)
+
+print("epoch 0 D loss:", d_losses[0])
+print("epoch 0 G loss:", g_losses[0])
+
+print("epoch 500 D loss:", d_losses[500])
+print("epoch 500 G loss:", g_losses[500])
+
+print("epoch 2000 D loss:", d_losses[2000])
+print("epoch 2000 G loss:", g_losses[2000])
+
+print("epoch 4000 D loss:", d_losses[4000])
+print("epoch 4000 G loss:", g_losses[4000])
+
+
+#------------------------------------------------------------------------
+# Step 13: Visualize Generator progress across training snapshots
+#------------------------------------------------------------------------
+snap_epochs = sorted(snapshots.keys())
+n_snaps = len(snap_epochs)
+
+cols = 3
+rows = int(np.ceil(n_snaps / cols))
+
+fig, axes = plt.subplots(rows, cols, figsize=(3.2 * cols, 3.2 * rows))
+axes = np.array(axes).reshape(-1)
+
+for i, ep in enumerate(snap_epochs):
+    ax = axes[i]
+
+    ax.scatter(sample[:, 0], sample[:, 1],
+               s=6, color="tab:blue", alpha=0.3, label="real")
+
+    fake_snap = snapshots[ep]
+
+    ax.scatter(fake_snap[:, 0], fake_snap[:, 1],
+               s=6, color="tab:red", alpha=0.6, label="fake")
+
+    ax.set_title(f"epoch {ep}")
+    ax.set_xlim(-1.5, 1.5)
+    ax.set_ylim(-1.5, 1.5)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+for j in range(n_snaps, len(axes)):
+    axes[j].axis("off")
+
+axes[0].legend(loc="upper right", fontsize=7)
+
+plt.tight_layout()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 14: Final result - real vs generated data and loss curves
+#------------------------------------------------------------------------
+fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+
+# Final overlay
+final_fake = G(tf.random.normal((500, LATENT_DIM)), training=False).numpy()
+
+axs[0].scatter(sample[:, 0], sample[:, 1],
+               s=8, color="tab:blue", alpha=0.4, label="real")
+
+axs[0].scatter(final_fake[:, 0], final_fake[:, 1],
+               s=8, color="tab:red", alpha=0.6, label="fake (trained G)")
+
+axs[0].set_title("Real vs. Generated (after training)")
+axs[0].set_xlim(-1.5, 1.5)
+axs[0].set_ylim(-1.5, 1.5)
+axs[0].set_aspect("equal")
+axs[0].legend()
+
+# Loss curves
+axs[1].plot(d_losses, label="D loss", color="tab:purple")
+axs[1].plot(g_losses, label="G loss", color="tab:orange")
+
+axs[1].axhline(np.log(4), color="tab:purple", linestyle="--",
+               linewidth=1, label="D equilibrium (log 4)")
+
+axs[1].axhline(np.log(2), color="tab:orange", linestyle="--",
+               linewidth=1, label="G equilibrium (log 2)")
+
+axs[1].set_xlabel("epoch")
+axs[1].set_ylabel("loss")
+axs[1].set_title("Training loss curves")
+axs[1].legend(fontsize=8)
+
+plt.tight_layout()
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 15: Evaluate the trained Generator
+#------------------------------------------------------------------------
+final_radius = np.linalg.norm(final_fake, axis=1)
+
+final_d_score = D(final_fake, training=False).numpy()
+
+print("final_fake shape:", final_fake.shape)
+print("mean final generated radius:", float(final_radius.mean()))
+print("std final generated radius:", float(final_radius.std()))
+print("mean D(final_fake):", float(final_d_score.mean()))
+
+print("log(4):", np.log(4))
+print("log(2):", np.log(2))
+
+
+#------------------------------------------------------------------------
+# Step 16: Quick revision - summary of key concepts
+#------------------------------------------------------------------------
+quick_revision = {
+    'GAN': 'Two networks (Generator and Discriminator) trained against each other.',
+    'Generator (G)': 'Maps random noise z to fake data that looks like real data.',
+    'Discriminator (D)': 'Classifies input as real (1) or fake (0) using a sigmoid output.',
+    'Latent vector z': 'Random noise input to G (2-D here, sampled from a normal distribution).',
+    'Real data': 'Points on a noisy ring of radius ~0.8 centered at the origin.',
+    'Loss': 'Binary Cross-Entropy for both G and D.',
+    'D loss': 'BCE(real, 1) + BCE(fake, 0).',
+    'G loss': 'BCE(D(G(z)), 1): G tries to make D label fakes as real.',
+    'Optimizer': 'Adam (lr=0.002, beta_1=0.5) for both networks.',
+    'Training loop': 'Alternate: update D first, then update G.',
+    'Equilibrium': 'D loss -> log(4), G loss -> log(2), and D(fake) -> 0.5.',
+    'Success check': 'Generated points form a ring with mean radius ~0.8.'
+}
+
+print(f"{'Concept':<20}{'Explanation'}")
+print('-' * 100)
+for concept, explanation in quick_revision.items():
+    print(f"{concept:<20}{explanation}")

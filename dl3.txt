@@ -1,0 +1,140 @@
+#------------------------------------------------------------------------
+# Step 1: Install required libraries
+#------------------------------------------------------------------------
+%pip install -U torch transformers accelerate scipy
+
+
+#------------------------------------------------------------------------
+# Step 2: Import libraries and select device
+#------------------------------------------------------------------------
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.io.wavfile import write
+from IPython.display import Audio, display
+from transformers import AutoProcessor, MusicgenForConditionalGeneration
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print("PyTorch:", torch.__version__)
+print("Device:", device)
+if device == "cuda":
+    print("GPU:", torch.cuda.get_device_name(0))
+
+
+#------------------------------------------------------------------------
+# Step 3: Load the MusicGen processor and model
+#------------------------------------------------------------------------
+MODEL_ID = "facebook/musicgen-small"
+
+print("Loading processor...")
+processor = AutoProcessor.from_pretrained(MODEL_ID)
+
+print("Loading model...")
+model = MusicgenForConditionalGeneration.from_pretrained(MODEL_ID)
+model = model.to(device)
+model.eval()
+
+sample_rate = model.config.audio_encoder.sampling_rate
+
+print("Model loaded:", MODEL_ID)
+print("Sampling rate:", sample_rate, "Hz")
+
+
+#------------------------------------------------------------------------
+# Step 4: Generate music from a text prompt
+#------------------------------------------------------------------------
+prompt = "calm ambient piano with soft strings, slow tempo, peaceful evening atmosphere"
+
+inputs = processor(text=[prompt], padding=True, return_tensors="pt")
+inputs = {key: value.to(device) for key, value in inputs.items()}
+
+# Set seed for reproducibility
+torch.manual_seed(42)
+if device == "cuda":
+    torch.cuda.manual_seed_all(42)
+
+with torch.no_grad():
+    audio_values = model.generate(
+        **inputs,
+        do_sample=True,
+        guidance_scale=3.0,
+        max_new_tokens=256
+    )
+
+audio_musicgen = audio_values[0, 0].detach().cpu().numpy()
+display(Audio(audio_musicgen, rate=sample_rate))
+
+
+#------------------------------------------------------------------------
+# Step 5: Normalize and save the audio as a WAV file
+#------------------------------------------------------------------------
+peak = max(np.max(np.abs(audio_musicgen)), 1e-9)
+audio_normalized = audio_musicgen / peak
+audio_int16 = np.int16(audio_normalized * 32767)
+
+write("partB_musicgen_output.wav", sample_rate, audio_int16)
+print("Saved: partB_musicgen_output.wav")
+
+
+#------------------------------------------------------------------------
+# Step 6: Plot the waveform
+#------------------------------------------------------------------------
+time = np.arange(len(audio_musicgen)) / sample_rate
+
+plt.figure(figsize=(12, 4))
+plt.plot(time, audio_musicgen)
+plt.xlabel("Time (seconds)")
+plt.ylabel("Amplitude")
+plt.title("MusicGen Output - Waveform")
+plt.grid(alpha=0.25)
+plt.show()
+
+
+#------------------------------------------------------------------------
+# Step 7: Effect of prompt detail (simple vs detailed prompt)
+#------------------------------------------------------------------------
+prompts = [
+    "relaxing piano music",
+    "gentle solo piano, slow tempo, reflective mood, soft room ambience"
+]
+
+for text_prompt in prompts:
+    print("Prompt:", text_prompt)
+
+    inputs = processor(text=[text_prompt], padding=True, return_tensors="pt")
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    torch.manual_seed(55)
+    if device == "cuda":
+        torch.cuda.manual_seed_all(55)
+
+    with torch.no_grad():
+        output = model.generate(**inputs, do_sample=True,
+                                guidance_scale=3.0, max_new_tokens=256)
+
+    clip = output[0, 0].detach().cpu().numpy()
+    display(Audio(clip, rate=sample_rate))
+
+
+#------------------------------------------------------------------------
+# Step 8: Quick revision - summary of key concepts
+#------------------------------------------------------------------------
+quick_revision = {
+    'MusicGen': 'Text-to-music generation model from Meta that creates audio from a text prompt.',
+    'Model used': 'facebook/musicgen-small, the smallest and fastest MusicGen variant.',
+    'Processor': 'Converts the text prompt into tokenized input tensors for the model.',
+    'Sampling rate': 'Read from the model config (32000 Hz); defines audio samples per second.',
+    'max_new_tokens': 'Controls the clip length (256 tokens is roughly 5 seconds of audio).',
+    'do_sample': 'True enables random sampling, giving varied and more natural music.',
+    'Guidance scale': 'How strongly the music follows the prompt (3.0 here).',
+    'Seed': 'Fixes randomness so the same prompt gives the same audio (42 and 55 used).',
+    'Normalization': 'Divides by the peak amplitude, then scales to 16-bit integers for WAV.',
+    'Waveform': 'Plot of amplitude vs time showing the generated audio signal.',
+    'Prompt detail': 'A detailed prompt (instrument, tempo, mood) gives more controlled output.',
+    'Device': 'Uses GPU if available, otherwise CPU.'
+}
+
+print(f"{'Concept':<20}{'Explanation'}")
+print('-' * 100)
+for concept, explanation in quick_revision.items():
+    print(f"{concept:<20}{explanation}")
